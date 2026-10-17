@@ -1,0 +1,56 @@
+# Build artifacts
+*.class
+*.apk
+*.aab
+build/
+app/build/
+*.iml
+.gradle/
+build.gradle.kts~!
+*.log
+*.tmp
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+ntuser.dat*
+NTUSER.DAT*
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Environment
+.env
+*.local
+local.properties
+
+# Models and data
+*.tflite
+*.pt
+*.onnx
+*.task
+*.zip
+*.tar.gz
+
+# Other junk
+*.xml.bak
+*.bak
+*.orig
+*.rej

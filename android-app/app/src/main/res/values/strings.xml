@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">AirPad</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="air_mouse">Air Mouse</string>
+    <string name="gamepad">Gamepad</string>
+    <string name="settings">Settings</string>
+    <string name="gyro_mode_off">Gyro: OFF</string>
+    <string name="gyro_mode_stick">Gyro: Stick Aim</string>
+    <string name="gyro_mode_mouse">Gyro: Air Mouse</string>
+    <string name="create_custom_profile">Create Custom Profile</string>
+    <string name="profile_name">Profile Name</string>
+    <string name="create">Create</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete_profile">Delete Profile</string>
+</resources>

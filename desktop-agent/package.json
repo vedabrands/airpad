@@ -1,0 +1,30 @@
+{
+  "name": "airpad-desktop-agent",
+  "version": "1.0.0",
+  "description": "Desktop background service for AirPad - receives UDP binary input packets and injects native mouse/keyboard/gamepad input on Windows",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/**/*.test.js"
+  },
+  "keywords": [
+    "air-mouse",
+    "gyro",
+    "gamepad",
+    "udp",
+    "remote-control",
+    "windows-input",
+    "jetpack-compose"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

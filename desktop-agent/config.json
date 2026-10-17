@@ -1,0 +1,20 @@
+{
+  "controlPort": 54321,
+  "discoveryPort": 54320,
+  "serverName": "LAPTOP-H4MUGTC9 (AirPad Host)",
+  "enableVirtualGamepad": true,
+  "enableSystemTray": true,
+  "pairingPin": "auto",
+  "requirePin": true,
+  "broadcastIntervalMs": 1000,
+  "disconnectTimeoutMs": 1500,
+  "watchdogTickMs": 100,
+  "statsIntervalMs": 2000,
+  "logLevel": "info",
+  "gyro": {
+    "sensitivityX": 1.2,
+    "sensitivityY": 1.2,
+    "deadzone": 0.02,
+    "smoothingFactor": 0.25
+  }
+}
