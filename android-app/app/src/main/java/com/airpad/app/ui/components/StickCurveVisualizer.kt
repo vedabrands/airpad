@@ -87,72 +87,70 @@ fun StickResponseGraph(
     )
 
     Column(modifier = modifier) {
-        Row(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-            Text(
-                text = "Input",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextMuted
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "Output",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextMuted
-            )
-        }
+        Text(
+            text = "Input",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextMuted
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            text = "Output",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextMuted
+        )
+    }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(height)
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val width = this.size.width
-                val h = this.size.height
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val width = this.size.width
+            val h = this.size.height
 
-                drawRect(color = Color(0xFF18181B))
+            drawRect(color = Color(0xFF18181B))
 
-                val path = Path().apply {
-                    moveTo(0f, h)
-                    for (i in 0..100) {
-                        val t = i.toFloat() / 100f
-                        val outY = applyCurve(t, curveType, exponent)
-                        lineTo(t * width, h - (outY * h))
-                    }
-                    lineTo(width, h)
-                    close()
+            val path = Path().apply {
+                moveTo(0f, h)
+                for (i in 0..100) {
+                    val t = i.toFloat() / 100f
+                    val outY = applyCurve(t, curveType, exponent)
+                    lineTo(t * width, h - (outY * h))
                 }
-
-                drawPath(
-                    path = path,
-                    color = PrimaryBlue.copy(alpha = 0.15f),
-                    alpha = 0.5f
-                )
-
-                drawPath(
-                    path = generateCurvePath(curveType, exponent).let { p ->
-                        val w = width
-                        val hh = h
-                        Path().apply {
-                            moveTo(0f, hh)
-                            for (i in 0..100) {
-                                val t = i.toFloat() / 100f
-                                val outY = applyCurve(t, curveType, exponent)
-                                lineTo(t * w, hh - (outY * hh))
-                            }
-                        }
-                    },
-                    color = PrimaryBlue,
-                    style = Stroke(width = 2f)
-                )
-
-                val markerY = h - (output * h)
-                drawCircle(
-                    color = Color(0xFF10B981),
-                    radius = 6f,
-                    center = Offset(input * width, markerY)
-                )
+                lineTo(width, h)
+                close()
             }
+
+            drawPath(
+                path = path,
+                color = PrimaryBlue.copy(alpha = 0.15f),
+                alpha = 0.5f
+            )
+
+            drawPath(
+                path = generateCurvePath(curveType, exponent).let { p ->
+                    val w = width
+                    val hh = h
+                    Path().apply {
+                        moveTo(0f, hh)
+                        for (i in 0..100) {
+                            val t = i.toFloat() / 100f
+                            val outY = applyCurve(t, curveType, exponent)
+                            lineTo(t * w, hh - (outY * hh))
+                        }
+                    }
+                },
+                color = PrimaryBlue,
+                style = Stroke(width = 2f)
+            )
+
+            val markerY = h - (output * h)
+            drawCircle(
+                color = Color(0xFF10B981),
+                radius = 6f,
+                center = Offset(input * width, markerY)
+            )
         }
     }
 }

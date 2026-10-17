@@ -1,10 +1,12 @@
 package com.airpad.app.ui.components
 
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.material3.icons.Icons
-import androidx.compose.material3.icons.filled.CheckCircle
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +48,7 @@ fun StickCalibrationDialog(
     Dimmer(onClick = { onDismiss() })
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StickCalibrationDialogContent(
     showDialog: Boolean,
@@ -60,6 +63,12 @@ private fun StickCalibrationDialogContent(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+        dismissButton = null,
         title = { Text("Stick Calibration", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(modifier = Modifier.width(300.dp)) {
@@ -96,11 +105,6 @@ private fun StickCalibrationDialogContent(
                         }
                     )
                 }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
             }
         }
     )

@@ -93,17 +93,11 @@ class HapticManager(context: Context) {
 
     private fun _doublePulse(intensity: Float) {
         if (vibrator == null || !vibrator.hasVibrator()) return
-        val amp = (intensity * 255).toInt().coerceIn(1, 255)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_DOUBLE_TICK)
-            vibrator.vibrate(effect)
-        } else {
-            // Manual double pulse for older devices
+        // Custom double pulse (no built-in DOUBLE_TICK effect in Android API)
+        _vibrate(12L, intensity)
+        Thread {
+            try { Thread.sleep(30L) } catch (_: InterruptedException) {}
             _vibrate(12L, intensity)
-            Thread {
-                try { Thread.sleep(30L) } catch (_: InterruptedException) {}
-                _vibrate(12L, intensity)
-            }.start()
-        }
+        }.start()
     }
 }

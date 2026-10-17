@@ -143,7 +143,8 @@ fun KeyboardRow(
                         viewModel.sendKeyboardKey(keyCode, ProtocolConstants.ACTION_RELEASE)
                         onTextChange(text + key)
                     }
-                }
+                },
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -152,11 +153,11 @@ fun KeyboardRow(
 @Composable
 fun KeyButton(
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = Modifier
-            .weight(1f)
+        modifier = modifier
             .height(44.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(SurfaceHighlight)

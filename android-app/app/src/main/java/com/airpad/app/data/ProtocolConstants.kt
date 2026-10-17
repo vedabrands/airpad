@@ -120,10 +120,6 @@ object ProtocolConstants {
     const val HEARTBEAT_INTERVAL_MS = 500L
     const val DISCONNECT_TIMEOUT_MS = 1500L
 
-    // Timeout
-    const val HEARTBEAT_INTERVAL_MS = 500L
-    const val DISCONNECT_TIMEOUT_MS = 1500L
-
     // Keyboard Key Codes (USB HID usage page subset)
     const val KEY_NONE: Short = 0
     const val KEY_ERROR_ROLLOVER: Short = 1

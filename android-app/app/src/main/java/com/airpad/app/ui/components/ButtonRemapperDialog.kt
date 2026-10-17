@@ -1,8 +1,8 @@
 package com.airpad.app.ui.components
 
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
-import androidx.compose.animation.core.Transition
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,10 +13,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.airpad.app.R
 import com.airpad.app.data.models.ButtonMappingConfig
+import com.airpad.app.data.models.ChordingRule
 import com.airpad.app.data.ProtocolConstants
 import com.airpad.app.ui.AirPadViewModel
 import com.airpad.app.ui.theme.AccentTeal
@@ -40,11 +43,6 @@ fun ButtonRemapperDialog(
     val turboButtonsState = remember { mutableStateOf(buttonMapping.turboButtons) }
     val turboRateHz = remember { mutableStateOf(buttonMapping.turboRateHz) }
     val chordingRulesState = remember { mutableStateOf(buttonMapping.chordingRules) }
-
-    val transition: Transition<Int, ButtonRemapperTab> = updateTransition(
-        init = { ButtonRemapperTab.Mapping },
-        target = { selectedTab.ordinal }
-    )
 
     val selectedTab by remember { mutableStateOf(ButtonRemapperTab.Mapping) }
 
@@ -77,8 +75,8 @@ private fun ButtonRemapperDialogContent(
     onTurboButtonsChanged: (Set<Int>) -> Unit,
     turboRateHz: Int,
     onTurboRateChanged: (Int) -> Unit,
-    chordingRules: List<ButtonMappingConfig.ChordingRule>,
-    onChordingRulesChanged: (List<ButtonMappingConfig.ChordingRule>) -> Unit,
+    chordingRules: List<ChordingRule>,
+    onChordingRulesChanged: (List<ChordingRule>) -> Unit,
     viewModel: AirPadViewModel
 ) {
     AlertDialog(
@@ -277,7 +275,7 @@ private fun TurboSettingsSection(
             )
             Slider(
                 value = turboRateHz.toFloat(),
-                onValueChange = { onTurboRateChanged(it.roundToInt()) },
+                onValueChange = { onTurboRateChanged(it.toInt()) },
                 valueRange = 5f..30f,
                 steps = 5
             )
@@ -316,8 +314,8 @@ private fun TurboToggleRow(
 
 @Composable
 private fun MacroEditorSection(
-    chordingRules: List<ButtonMappingConfig.ChordingRule>,
-    onChordingRulesChanged: (List<ButtonMappingConfig.ChordingRule>) -> Unit,
+    chordingRules: List<ChordingRule>,
+    onChordingRulesChanged: (List<ChordingRule>) -> Unit,
     viewModel: AirPadViewModel
 ) {
     Column(
@@ -360,7 +358,7 @@ private fun MacroEditorSection(
                 Button(
                     onClick = {
                         // Add a new empty rule
-                        val newRule = ButtonMappingConfig.ChordingRule(
+                        val newRule = ChordingRule(
                             primaryBit = ProtocolConstants.GAMEPAD_BTN_LB,
                             secondaryBit = ProtocolConstants.GAMEPAD_BTN_A,
                             outputBit = ProtocolConstants.GAMEPAD_BTN_X
@@ -379,7 +377,7 @@ private fun MacroEditorSection(
 
 @Composable
 private fun ChordingRuleRow(
-    rule: ButtonMappingConfig.ChordingRule,
+    rule: ChordingRule,
     onDelete: () -> Unit
 ) {
     Row(
@@ -433,7 +431,7 @@ private fun Dimmer(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0x000000.copy(alpha = 0.5f)))
+            .background(Color.Black.copy(alpha = 0.5f))
             .clickable(onClick = onClick)
     )
 }
