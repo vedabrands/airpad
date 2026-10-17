@@ -40,13 +40,20 @@ import kotlinx.coroutines.launch
 class AirPadViewModel(application: Application) : AndroidViewModel(application) {
 
     private val profileManager = ProfileManager(application)
-    private val sessionManager = SessionManager(viewModelScope)
+    private val sessionManager = SessionManager(viewModelScope, application)
     private val hapticManager = HapticManager(application)
 
     // 1. Connection State
     val connectionState: StateFlow<ConnectionState> = sessionManager.connectionState
 
-    // 2. Discovered LAN Servers
+    // 2. Bluetooth support & paired devices
+    val isBluetoothSupported: Boolean get() = sessionManager.isBluetoothSupported
+    val isBluetoothEnabled: Boolean get() = sessionManager.isBluetoothEnabled
+
+    private val _bluetoothDevices = MutableStateFlow<List<DiscoveredServer>>(emptyList())
+    val bluetoothDevices: StateFlow<List<DiscoveredServer>> = _bluetoothDevices.asStateFlow()
+
+    // 3. Discovered LAN Servers (fallback)
     val discoveredServers: StateFlow<List<DiscoveredServer>> = sessionManager.discoveryClient.discoveredServers
         .map { it.values.toList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -543,6 +550,19 @@ class AirPadViewModel(application: Application) : AndroidViewModel(application) 
 
     fun cancelReconnection() {
         sessionManager.cancelReconnection()
+    }
+
+    // --- Bluetooth (Plug-and-Play) ---
+    fun refreshBluetoothDevices() {
+        _bluetoothDevices.value = sessionManager.getPairedBluetoothDevices()
+    }
+
+    fun connectViaBluetooth(server: DiscoveredServer) {
+        sessionManager.connectViaBluetooth(server)
+    }
+
+    suspend fun requestBluetoothEnable() {
+        sessionManager.requestBluetoothEnable()
     }
 
     fun disconnect() {

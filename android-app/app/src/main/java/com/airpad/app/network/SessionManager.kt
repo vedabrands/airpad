@@ -1,5 +1,6 @@
 package com.airpad.app.network
 
+import android.content.Context
 import android.os.Build
 import com.airpad.app.data.ProtocolConstants
 import com.airpad.app.data.models.ConnectionState
@@ -19,8 +20,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,22 +33,25 @@ import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 class SessionManager(
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val context: Context? = null
 ) {
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
+    // Bluetooth client for plug-and-play connection
+    private val bluetoothClient = context?.let { BluetoothClient(scope, it) }
+
+    // UDP client as fallback for LAN mode
+    private var udpClient: UdpClient? = null
     private val clientUid = UUID.randomUUID()
     private val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
 
     private var heartbeatJob: Job? = null
     private var reconnectJob: Job? = null
-    private var udpClient: UdpClient? = null
-
     private var activeHost: String = ""
     private var activePort: Int = ProtocolConstants.CONTROL_PORT
     private var activeServerName: String = ""
-
     private var lastPairedServer: DiscoveredServer? = null
     private var lastPinCode: Int = 0
     private var lastHeartbeatAckTimestamp: Long = 0L
@@ -61,6 +65,46 @@ class SessionManager(
 
     init {
         discoveryClient.startListening()
+        // Listen for Bluetooth packets if available
+        bluetoothClient?.let { bt ->
+            scope.launch {
+                bt.packetsReceived.collect { (opcode, payload) ->
+                    handleServerPacket(opcode, 0L, payload)
+                }
+            }
+            scope.launch {
+                bt.connectionState.collect { state ->
+                    _connectionState.value = state
+                }
+            }
+        }
+    }
+
+    /**
+     * Get Bluetooth discovery status.
+     */
+    val isBluetoothSupported get() = bluetoothClient?.isBluetoothSupported() == true
+    val isBluetoothEnabled get() = bluetoothClient?.isBluetoothEnabled() == true
+
+    /**
+     * Get paired Bluetooth devices that are AirPad agents.
+     */
+    fun getPairedBluetoothDevices(): List<DiscoveredServer> {
+        return bluetoothClient?.getPairedDevices() ?: emptyList()
+    }
+
+    /**
+     * Connect via Bluetooth (plug-and-play - no PIN required).
+     */
+    fun connectViaBluetooth(server: DiscoveredServer) {
+        bluetoothClient?.connectToDevice(server)
+    }
+
+    /**
+     * Request Bluetooth enablement.
+     */
+    suspend fun requestBluetoothEnable() {
+        bluetoothClient?.requestEnableAndWait()
     }
 
     fun initiatePairing(server: DiscoveredServer, pinCode: Int) {
@@ -171,7 +215,6 @@ class SessionManager(
 
     /**
      * Executes exponential backoff reconnection if the connection drops.
-     * Backoff schedule: 500ms -> 1000ms -> 2000ms -> 4000ms -> 8000ms
      */
     private fun triggerAutoReconnect() {
         val server = lastPairedServer ?: run {
@@ -197,7 +240,6 @@ class SessionManager(
 
                 delay(backoffDelay)
 
-                // Re-bind UDP socket and re-send pair request
                 udpClient?.disconnect()
                 udpClient = UdpClient(scope, onPacketReceived = { opcode, sessionToken, payload ->
                     handleServerPacket(opcode, sessionToken, payload)
@@ -208,11 +250,9 @@ class SessionManager(
                 val pairPayload = PacketEncoder.encodePairRequest(lastPinCode, clientUid, deviceName)
                 udpClient?.sendPacket(ProtocolConstants.OP_PAIR_REQUEST, pairPayload)
 
-                // Wait up to 1200ms to see if connection is restored
                 val waitStart = System.currentTimeMillis()
                 while (System.currentTimeMillis() - waitStart < 1200L) {
                     if (_connectionState.value is ConnectionState.Connected) {
-                        // Successfully restored
                         return@launch
                     }
                     delay(100)
@@ -222,7 +262,6 @@ class SessionManager(
                 backoffDelay *= 2L
             }
 
-            // If all retry attempts exhausted
             _connectionState.value = ConnectionState.Error("Connection lost to ${server.name}. Reconnection failed after $MAX_RECONNECT_ATTEMPTS attempts.")
             udpClient?.disconnect()
             udpClient = null
@@ -249,88 +288,146 @@ class SessionManager(
         _connectionState.value = ConnectionState.Disconnected
     }
 
+    /**
+     * Send mode switch configuration via Bluetooth or UDP.
+     */
+    private fun isBluetoothActive(): Boolean =
+        bluetoothClient?.connectionState?.value is ConnectionState.Connected
+
     fun sendModeSwitch(config: GyroConfig, resetBias: Boolean = false) {
         val payload = PacketEncoder.encodeModeSwitch(config, resetBias)
-        udpClient?.sendPacket(ProtocolConstants.OP_MODE_SWITCH, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_MODE_SWITCH, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_MODE_SWITCH, payload)
+        }
     }
 
     fun sendMouseDelta(dx: Float, dy: Float) {
         val payload = PacketEncoder.encodeMouseDelta(MouseDeltaEvent(dx, dy))
-        udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_DELTA, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_MOUSE_DELTA, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_DELTA, payload)
+        }
     }
 
-    /**
-     * Batched mouse delta sends multiple deltas in a single packet
-     * to reduce per-packet overhead and achieve higher effective update rate.
-     */
     fun sendBatchedMouseDeltas(deltas: List<Pair<Float, Float>>) {
         if (deltas.isEmpty()) return
         val payload = PacketEncoder.encodeMouseComboBatch(deltas)
-        udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_COMBO, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_MOUSE_COMBO, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_COMBO, payload)
+        }
     }
 
-    /**
-     * Immediate high-priority send that bypasses batching.
-     * Used for button presses and critical events.
-     */
     fun sendImmediate(opcode: Byte, payload: ByteArray = ByteArray(0)) {
-        udpClient?.sendImmediate(opcode, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(opcode, payload)
+        } else {
+            udpClient?.sendImmediate(opcode, payload)
+        }
     }
 
     fun sendMouseButton(buttonMask: Byte, action: Byte) {
         val payload = PacketEncoder.encodeMouseButton(MouseButtonEvent(buttonMask, action))
-        udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_BUTTON, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_MOUSE_BUTTON, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_BUTTON, payload)
+        }
     }
 
     fun sendMouseScroll(scrollX: Short, scrollY: Short) {
         val payload = PacketEncoder.encodeMouseScroll(MouseScrollEvent(scrollX, scrollY))
-        udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_SCROLL, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_MOUSE_SCROLL, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_SCROLL, payload)
+        }
     }
 
     fun sendMouseCombo(dx: Short, dy: Short, buttonState: Byte, scrollY: Byte, scrollX: Byte) {
         val payload = PacketEncoder.encodeMouseCombo(MouseComboEvent(dx, dy, buttonState, scrollY, scrollX))
-        udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_COMBO, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_MOUSE_COMBO, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_MOUSE_COMBO, payload)
+        }
     }
 
     fun sendKeyboardKey(keyCode: Short, action: Byte, modifiers: Byte = 0) {
         val payload = PacketEncoder.encodeKeyboardKey(KeyboardKeyEvent(keyCode, action, modifiers))
-        udpClient?.sendPacket(ProtocolConstants.OP_KEYBOARD_KEY, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_KEYBOARD_KEY, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_KEYBOARD_KEY, payload)
+        }
     }
 
     fun sendKeyboardText(text: String) {
         val bytes = text.toByteArray(StandardCharsets.UTF_8)
         val payload = PacketEncoder.encodeKeyboardText(bytes)
-        udpClient?.sendPacket(ProtocolConstants.OP_KEYBOARD_KEY, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_KEYBOARD_KEY, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_KEYBOARD_KEY, payload)
+        }
     }
 
     fun sendGamepadState(event: GamepadStateEvent) {
         val payload = PacketEncoder.encodeGamepadState(event)
-        udpClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_STATE, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_STATE, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_STATE, payload)
+        }
     }
 
     fun sendGamepadStick(stickId: Byte, posX: Short, posY: Short) {
         val payload = PacketEncoder.encodeGamepadStick(GamepadStickEvent(stickId, posX, posY))
-        udpClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_STICK, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_STICK, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_STICK, payload)
+        }
     }
 
     fun sendGamepadButton(buttonBit: Int, action: Byte) {
         val payload = PacketEncoder.encodeGamepadButton(GamepadButtonEvent(buttonBit, action))
-        udpClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_BUTTON, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_BUTTON, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_BUTTON, payload)
+        }
     }
 
     fun sendGamepadTrigger(triggerId: Byte, value: UByte) {
         val payload = PacketEncoder.encodeGamepadTrigger(GamepadTriggerEvent(triggerId, value))
-        udpClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_TRIGGER, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_TRIGGER, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_GAMEPAD_TRIGGER, payload)
+        }
     }
 
     fun sendRawImu(event: RawImuEvent) {
         val payload = PacketEncoder.encodeRawImu(event)
-        udpClient?.sendPacket(ProtocolConstants.OP_RAW_IMU_DATA, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_RAW_IMU_DATA, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_RAW_IMU_DATA, payload)
+        }
     }
 
     fun sendGyroCalibrate(command: Byte = 0) {
         val payload = PacketEncoder.encodeGyroCalibrate(command)
-        udpClient?.sendPacket(ProtocolConstants.OP_GYRO_CALIBRATE, payload)
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_GYRO_CALIBRATE, payload)
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_GYRO_CALIBRATE, payload)
+        }
     }
 
     fun disconnect() {
@@ -339,9 +436,15 @@ class SessionManager(
         reconnectJob?.cancel()
         reconnectJob = null
 
-        udpClient?.sendPacket(ProtocolConstants.OP_DISCONNECT)
-        udpClient?.disconnect()
-        udpClient = null
+        if (isBluetoothActive()) {
+            bluetoothClient?.sendPacket(ProtocolConstants.OP_DISCONNECT)
+            bluetoothClient?.disconnect()
+        } else {
+            udpClient?.sendPacket(ProtocolConstants.OP_DISCONNECT)
+            udpClient?.disconnect()
+            udpClient = null
+        }
+
         _connectionState.value = ConnectionState.Disconnected
     }
 }

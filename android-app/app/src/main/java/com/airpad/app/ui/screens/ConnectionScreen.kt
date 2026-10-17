@@ -68,6 +68,7 @@ fun ConnectionScreen(
 ) {
     val connectionState by viewModel.connectionState.collectAsState()
     val discoveredServers by viewModel.discoveredServers.collectAsState()
+    val bluetoothDevices by viewModel.bluetoothDevices.collectAsState()
 
     var selectedServerForPin by remember { mutableStateOf<DiscoveredServer?>(null) }
     var manualIp by remember { mutableStateOf("") }
@@ -90,7 +91,18 @@ fun ConnectionScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Discovered Servers Header
+        // ── Bluetooth (Plug-and-Play) Section ──
+        BluetoothSection(
+            isSupported = viewModel.isBluetoothSupported,
+            isEnabled = viewModel.isBluetoothEnabled,
+            devices = bluetoothDevices,
+            onEnable = { viewModel.refreshBluetoothDevices() },
+            onConnect = { viewModel.connectViaBluetooth(it) }
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // ── LAN Fallback Section ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -116,7 +128,7 @@ fun ConnectionScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp)
+                    .height(120.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(SurfaceDark)
                     .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp)),
@@ -126,21 +138,9 @@ fun ConnectionScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(28.dp),
-                        color = PrimaryBlue,
-                        strokeWidth = 2.5.dp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Listening for AirPad Desktop beacons...",
+                        text = "No LAN agents found — use Bluetooth above",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Ensure PC and Phone are on the same Wi-Fi subnet",
-                        style = MaterialTheme.typography.labelSmall,
                         color = TextMuted
                     )
                 }
@@ -419,6 +419,161 @@ fun ConnectionStatusCard(
                         color = TextSecondary
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun BluetoothSection(
+    isSupported: Boolean,
+    isEnabled: Boolean,
+    devices: List<DiscoveredServer>,
+    onEnable: () -> Unit,
+    onConnect: (DiscoveredServer) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(SurfaceDark)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Bluetooth",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                val statusColor = when {
+                    !isSupported -> TextMuted
+                    !isEnabled -> DangerRed
+                    devices.isNotEmpty() -> SuccessGreen
+                    else -> AccentTeal
+                }
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(statusColor)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = when {
+                        !isSupported -> "Not supported"
+                        !isEnabled -> "Bluetooth off"
+                        devices.isNotEmpty() -> "${devices.size} paired"
+                        else -> "Scanning..."
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted
+                )
+            }
+            if (!isSupported) {
+                Text("No BT hardware", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+            } else if (!isEnabled) {
+                Button(
+                    onClick = onEnable,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PrimaryBlue,
+                        contentColor = TextPrimary
+                    ),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text("Enable Bluetooth", fontSize = 11.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (!isSupported) {
+            Text(
+                text = "Bluetooth not available on this device. Use LAN or manual connection.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted
+            )
+        } else if (!isEnabled) {
+            Text(
+                text = "Turn on Bluetooth to connect wirelessly to your desktop.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted
+            )
+        } else if (devices.isEmpty()) {
+            Text(
+                text = "No paired AirPad agents found. Pair your PC in Windows Bluetooth settings first.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(devices) { server ->
+                    BluetoothDeviceItem(server = server, onConnect = { onConnect(server) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BluetoothDeviceItem(
+    server: DiscoveredServer,
+    onConnect: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(SurfaceHighlight)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+            .clickable { onConnect() }
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "📡",
+                    fontSize = 18.sp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = server.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Bluetooth SPP • No PIN required",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = SuccessGreen
+                    )
+                }
+            }
+            Button(
+                onClick = onConnect,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PrimaryBlue,
+                    contentColor = TextPrimary
+                ),
+                modifier = Modifier.height(32.dp)
+            ) {
+                Text("Connect", fontSize = 11.sp)
             }
         }
     }
